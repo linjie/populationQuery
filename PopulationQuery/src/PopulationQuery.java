@@ -39,25 +39,25 @@ public class PopulationQuery {
 	 */
 	public static final int LONGITUDE_INDEX = 6;
 
+	
+	public static final int SEQUENTIAL_CUTOFF = 1;
 	/**
 	 * There should be only one fork/join pool per program, so this needs to be
 	 * a static variable.
 	 */
-	private static ForkJoinPool fjPool = new ForkJoinPool();
+	public static ForkJoinPool fjPool = new ForkJoinPool();
 	
 	/**
 	 * Array of census data parsed from the input file.
 	 */
 	private CensusData data;
 	
-	private float minLon;
-	private float maxLon;
-	private float minLat;
-	private float maxLat;
+	private Rectangle boundary;
 	
 	private int cols;
 	private int rows;
 	
+	public int[][] grid;
 	private int versionNumber;
 
 	/**
@@ -69,10 +69,8 @@ public class PopulationQuery {
 	public PopulationQuery(String filename) {
 		// Parse the data and store it in an array.
 		this.data = parse(filename);
-		minLon = +360;
-		maxLon = -360;
-		minLat = +360;
-		maxLat = -360;
+		boundary = new Rectangle();
+	
 	}
 
 	/**
@@ -150,6 +148,10 @@ public class PopulationQuery {
 			case 1: preprocess1(data);
 				break;
 			case 2: preprocess2(data);
+				break;
+			case 3: preprocess3(data);
+				break;
+			case 4: preprocess4(data);
 			default: 
 				break;
 		}
@@ -158,28 +160,31 @@ public class PopulationQuery {
 	public void preprocess1(CensusData data)
 	{
 		versionNumber = 1;
-		float bounds[] = PreprocessClass1.preprocess(data, 0, data.dataSize);
-		minLon=bounds[0];
-		maxLon=bounds[1];
-		minLat=bounds[2];
-		maxLat=bounds[3];
+		boundary = PreprocessClass1.preprocess(data, 0, data.dataSize);
+		
 	}
 	
 	public void preprocess2(CensusData data)
 	{
 		versionNumber = 2;
-		float bounds[] = fjPool.invoke(new PreprocessClass2(data, 0, data.dataSize));
-		minLon = bounds[0];
-		maxLon = bounds[1];
-		minLat = bounds[2];
-		maxLat = bounds[3];
+		boundary = fjPool.invoke(new PreprocessClass2(data, 0, data.dataSize));
+	
 		
-		/*
-		System.out.println(bounds[0]);
-		System.out.println(bounds[1]);
-		System.out.println(bounds[2]);
-		System.out.println(bounds[3]);
-		*/
+	
+	}
+	public void preprocess3(CensusData data)
+	{
+		versionNumber = 3;
+		grid = PreprocessClass3.preprocess(this, data, rows, cols);
+		
+	}
+	public void preprocess4(CensusData data)
+	{
+		versionNumber = 4;
+		Rectangle boundary = fjPool.invoke(new PreprocessClass2(data, 0, data.dataSize));
+		DataStorage dataObj = new DataStorage(data, rows, cols, boundary);	
+		grid = fjPool.invoke(new PreprocessClass4(this, dataObj, 0, data.dataSize));
+		PreprocessClass3.presum(grid, rows, cols);
 	}
 
 	/**
@@ -200,8 +205,10 @@ public class PopulationQuery {
 	{
 		switch(versionNumber)
 		{
-			case 1: return singleInteraction1(w, s, e, n);
-			case 2: return singleInteraction2(w, s, e, n);
+			case 1: return singleInteraction1(w, s, e, n); 
+			case 2: return singleInteraction2(w, s, e, n); 
+			case 3: return singleInteraction3(w,s,e,n);
+			case 4: return singleInteraction4(w,s,e,n);
 			default:
 				break;
 		}
@@ -220,24 +227,34 @@ public class PopulationQuery {
 		return new Pair<Integer, Float>(roughAns.getElementA(), roughAns.getElementA()*100.0f /roughAns.getElementB());
 	}
 	
+	public Pair<Integer, Float> singleInteraction3(int w, int s, int e, int n)
+	{
+		Pair<Integer, Integer> roughAns= SingleInteractionClass3.sum(this, w, s, e, n);
+		return new Pair<Integer, Float>(roughAns.getElementA(), roughAns.getElementA()*100.0f /roughAns.getElementB());
+	}
+	
+	public Pair<Integer, Float> singleInteraction4(int w, int s, int e, int n)
+	{
+		Pair<Integer, Integer> roughAns= SingleInteractionClass3.sum(this, w, s, e, n);
+		return new Pair<Integer, Float>(roughAns.getElementA(), roughAns.getElementA()*100.0f /roughAns.getElementB());
+	}
+	
 	public Pair<Integer, Integer> gridLocation(CensusGroup group)
 	{
 		Integer column;
 		Integer row;
-		float lonInc = (maxLon-minLon)/ cols;
-		float nLon = (group.longitude-minLon)/lonInc;
-		if(nLon >= cols)
-			column = cols;
-		else 
-			column = (int) nLon+1;
-		float latInc = (maxLat-minLat)/rows;
-		float nLat = (group.latitude-minLat)/latInc;
-		if(nLat >= cols)
-			row = rows;
-		else
-			row = (int) nLat+1;
-		if((row>rows)||(column>cols)||(row==0)||(column==0))
-			System.out.println("problem");
+		
+		column = (int) ((group.longitude - boundary.left)/((boundary.right-boundary.left)/ cols))+1;
+		row = (int) ((group.latitude - boundary.bottom)/((boundary.top-boundary.bottom)/rows)) + 1;
+		if (row >rows){
+	
+			row = row - 1;
+			
+		}
+		if (column >cols){
+			column = column - 1;
+			
+		}
 		return new Pair<Integer, Integer>(row, column);			
 	}
 

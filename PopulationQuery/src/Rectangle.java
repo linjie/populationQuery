@@ -42,6 +42,13 @@ public class Rectangle {
 		top = t;
 		bottom = b;
 	}
+	public Rectangle(){
+		left = Float.MAX_VALUE;
+		right = - Float.MAX_VALUE;
+		top = - Float.MAX_VALUE;
+		bottom = Float.MAX_VALUE;
+		
+	}
 
 	/**
 	 * Returns a new Rectangle that is the smallest rectangle containing this

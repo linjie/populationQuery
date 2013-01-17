@@ -20,6 +20,7 @@ public class SingleInteractionClass1
 				pop += data.data[i].population;
 			popUS += data.data[i].population;
 		}
+		//System.out.println("Version 1, population:"+pop+" total population: "+popUS);
 		return new Pair<Integer, Integer>(pop, popUS);
 	}
 }
